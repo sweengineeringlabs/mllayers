@@ -192,4 +192,5 @@ Each layer module contains or imports its own backward op structs. This makes it
 
 ## See Also
 
-- [README](../../README.md)
+- [Overview](../README.md)
+- [Integration Guide](integration.md)
