@@ -108,6 +108,62 @@
             next iteration
 ```
 
+## Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant C as Caller
+    participant S as Sequential
+    participant L as Layer (e.g. Linear)
+    participant TP as mlautograd::tape
+    participant GT as GradientTape
+
+    C->>S: forward(&input)
+    loop each layer in order
+        S->>L: forward(&x)
+        L->>L: numeric op via llmtensor
+        L->>TP: record_op(TapeEntry { LinearBackward, ... })
+        TP->>GT: push(TapeEntry)
+        L-->>S: output: Tensor
+    end
+    S-->>C: output: Tensor [batch, out_features]
+
+    Note over C,GT: loss computed externally
+
+    C->>TP: tape::backward(&loss)
+    loop entries in reverse
+        TP->>GT: pop TapeEntry
+        GT->>GT: LinearBackward / ActivationBackward / etc
+        GT->>GT: accumulate grad per TensorId
+    end
+
+    C->>S: parameters_mut()
+    S-->>C: Vec<&mut Tensor> (weights + biases of all layers)
+    Note over C: hand to mloptim::Optimizer::step
+```
+
+## Dataflow Diagram
+
+```mermaid
+flowchart TD
+    A["Input Tensor<br/>shape: [batch, in_features]"] --> B["layer[0]::forward<br/>e.g. Linear(in→hidden)"]
+    B --> C["Tensor [batch, hidden]"]
+    B --> D["TapeEntry → GradientTape"]
+    C --> E["layer[1]::forward<br/>e.g. GELU"]
+    E --> F["Tensor [batch, hidden]"]
+    E --> G["TapeEntry → GradientTape"]
+    F --> H["layer[2]::forward<br/>e.g. Linear(hidden→out)"]
+    H --> I["Output Tensor<br/>shape: [batch, out_features]"]
+    H --> J["TapeEntry → GradientTape"]
+
+    I --> K["Loss::forward(pred, target)<br/>OUT: scalar Tensor"]
+    K --> L["tape::backward(loss)"]
+    D & G & J --> L
+    L --> M["Gradients on parameters<br/>shape: same as each weight/bias"]
+    M --> N["parameters_mut()<br/>OUT: Vec&lt;&mut Tensor&gt;"]
+    N --> O["mloptim::Optimizer::step<br/>updates weights in-place"]
+```
+
 ## Design Decisions
 
 **`Layer` as an object-safe trait.**
