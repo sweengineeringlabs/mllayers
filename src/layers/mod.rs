@@ -6,6 +6,7 @@ pub(crate) mod conv1d_builder;
 pub(crate) mod dropout;
 pub(crate) mod layer_norm;
 pub(crate) mod linear;
+pub(crate) mod lora_linear;
 pub(crate) mod sequential;
 
 pub use activations::{GELU, ReLU, SiLU, Sigmoid, Tanh};
@@ -16,4 +17,5 @@ pub use conv1d_builder::Conv1dBuilder;
 pub use dropout::Dropout;
 pub use layer_norm::LayerNorm;
 pub use linear::Linear;
+pub use lora_linear::LoraLinear;
 pub use sequential::Sequential;
