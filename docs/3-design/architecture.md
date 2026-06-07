@@ -18,32 +18,39 @@
 ┌──────────────────────────────────────────────────────────────────┐
 │                           mllayers                               │
 │                                                                  │
-│  ┌──────────┐                                                    │
-│  │  layer   │  Layer trait (forward / parameters / parameter_count) │
-│  └────┬─────┘                                                    │
-│       │ implemented by all layer structs                         │
-│       ▼                                                          │
-│  ┌─────────────────────────────────────────────────────────┐     │
-│  │                        layers/                          │     │
-│  │                                                         │     │
-│  │  ┌──────────┐  ┌─────────────────┐  ┌───────────────┐  │     │
-│  │  │  linear  │  │     conv1d      │  │  batch_norm   │  │     │
-│  │  │          │  │  + conv1d_      │  │  + batch_norm │  │     │
-│  │  │  Linear  │  │    builder      │  │    _builder   │  │     │
-│  │  └──────────┘  └─────────────────┘  └───────────────┘  │     │
-│  │                                                         │     │
-│  │  ┌──────────┐  ┌──────────┐  ┌────────────────────┐   │     │
-│  │  │layer_norm│  │ dropout  │  │    sequential      │   │     │
-│  │  │          │  │          │  │                    │   │     │
-│  │  │LayerNorm │  │ Dropout  │  │   Sequential       │   │     │
-│  │  └──────────┘  └──────────┘  └────────────────────┘   │     │
-│  │                                                         │     │
-│  │  ┌──────────────────────────────────────────────────┐   │     │
-│  │  │                  activations/                    │   │     │
-│  │  │  GELU  SiLU  ReLU  Sigmoid  Tanh                │   │     │
-│  │  │  + backward ops for each                        │   │     │
-│  │  └──────────────────────────────────────────────────┘   │     │
-│  └─────────────────────────────────────────────────────────┘     │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │  api/                                                    │    │
+│  │  └── layer.rs   Layer trait (forward / parameters /      │    │
+│  │                 parameters_mut / parameter_count)        │    │
+│  └──────────────────────────┬───────────────────────────────┘    │
+│                             │ implemented by all layer structs   │
+│                             ▼                                    │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │  core/layers/                                            │    │
+│  │                                                          │    │
+│  │  ┌──────────┐  ┌─────────────────┐  ┌───────────────┐   │    │
+│  │  │  linear  │  │     conv1d      │  │  batch_norm   │   │    │
+│  │  │  Linear  │  │  + conv1d_      │  │  + batch_norm │   │    │
+│  │  │          │  │    builder      │  │    _builder   │   │    │
+│  │  └──────────┘  └─────────────────┘  └───────────────┘   │    │
+│  │                                                          │    │
+│  │  ┌──────────┐  ┌──────────┐  ┌────────────────────┐    │    │
+│  │  │layer_norm│  │ dropout  │  │    sequential      │    │    │
+│  │  │LayerNorm │  │ Dropout  │  │    Sequential      │    │    │
+│  │  └──────────┘  └──────────┘  └────────────────────┘    │    │
+│  │                                                          │    │
+│  │  ┌──────────────────────────────────────────────────┐    │    │
+│  │  │  activations/                                    │    │    │
+│  │  │  GELU  SiLU  ReLU  Sigmoid  Tanh                │    │    │
+│  │  │  + backward ops for each                        │    │    │
+│  │  └──────────────────────────────────────────────────┘    │    │
+│  └──────────────────────────────────────────────────────────┘    │
+│                             │                                    │
+│  ┌──────────────────────────▼───────────────────────────────┐    │
+│  │  saf/                                                    │    │
+│  │  sole public re-export surface — re-exports Layer and    │    │
+│  │  all concrete types from core/layers/                    │    │
+│  └──────────────────────────────────────────────────────────┘    │
 └──────────────────────────────────────────────────────────────────┘
          │                         │
          ▼                         ▼
@@ -56,14 +63,15 @@
 
 | Module | Responsibility | Key Types | Dependencies |
 |--------|---------------|-----------|--------------|
-| `layer` | Defines the `Layer` trait: `forward`, `parameters`, `parameters_mut`, `parameter_count`. All layer structs implement this. | `Layer` | `mlautograd::Tensor` |
-| `layers::linear` | Fully-connected affine transform (y = xW^T + b). Xavier weight initialization. Registers `AddBackward` and `MatMulBackward` on the tape. | `Linear` | `mlautograd`, `llmtensor` |
-| `layers::conv1d` | 1D convolution with configurable stride, padding, and dilation. `Conv1dBuilder` enforces valid config at construction time. | `Conv1d`, `Conv1dBuilder` | `mlautograd`, `llmtensor` |
-| `layers::batch_norm` | Batch normalization with running mean/variance. `BatchNorm1dBuilder` selects train vs. eval mode. | `BatchNorm1d`, `BatchNorm1dBuilder` | `mlautograd`, `llmtensor` |
-| `layers::layer_norm` | Normalize over the last tensor dimension; scale and shift via learned gamma/beta. Math inlined — no external normalization dep. Used in the standard pre-norm transformer pattern. | `LayerNorm` | `mlautograd`, `llmtensor` |
-| `layers::dropout` | Inverted dropout: scale kept elements by 1/(1-p) during training; identity during eval. | `Dropout` | `mlautograd`, `rand` |
-| `layers::sequential` | Chains a `Vec<Box<dyn Layer>>`. Delegates `forward` through each layer in order; collects parameters from all children. | `Sequential` | `layer` |
-| `layers::activations` | Element-wise activation functions. Each activation struct also carries its backward op, registered via `tape::record_op` on the forward call. Math for GELU/SiLU is inlined to match GPT-2/LLaMA numerics exactly. | `GELU`, `SiLU`, `ReLU`, `Sigmoid`, `Tanh` | `mlautograd` |
+| `api::layer` | Defines the `Layer` trait: `forward`, `parameters`, `parameters_mut`, `parameter_count`. Public contract; no dependency on `core/`. | `Layer` | `mlautograd::Tensor` |
+| `core::layers::linear` | Fully-connected affine transform (y = xW^T + b). Xavier weight initialization. Registers `AddBackward` and `MatMulBackward` on the tape. | `Linear` | `mlautograd`, `llmtensor` |
+| `core::layers::conv1d` | 1D convolution with configurable stride, padding, and dilation. `Conv1dBuilder` enforces valid config at construction time. | `Conv1d`, `Conv1dBuilder` | `mlautograd`, `llmtensor` |
+| `core::layers::batch_norm` | Batch normalization with running mean/variance. `BatchNorm1dBuilder` selects train vs. eval mode. | `BatchNorm1d`, `BatchNorm1dBuilder` | `mlautograd`, `llmtensor` |
+| `core::layers::layer_norm` | Normalize over the last tensor dimension; scale and shift via learned gamma/beta. Math inlined — no external normalization dep. Used in the standard pre-norm transformer pattern. | `LayerNorm` | `mlautograd`, `llmtensor` |
+| `core::layers::dropout` | Inverted dropout: scale kept elements by 1/(1-p) during training; identity during eval. | `Dropout` | `mlautograd`, `rand` |
+| `core::layers::sequential` | Chains a `Vec<Box<dyn Layer>>`. Delegates `forward` through each layer in order; collects parameters from all children. | `Sequential` | `api::layer` |
+| `core::layers::activations` | Element-wise activation functions. Each activation struct also carries its backward op, registered via `tape::record_op` on the forward call. Math for GELU/SiLU is inlined to match GPT-2/LLaMA numerics exactly. | `GELU`, `SiLU`, `ReLU`, `Sigmoid`, `Tanh` | `mlautograd` |
+| `saf` | Sole public re-export surface. Re-exports `Layer` from `api` and all concrete types from `core::layers`. Consumers import everything via `mllayers::*` or named paths through `saf`. | — | `api`, `core` |
 
 ## Data Flow
 
@@ -180,6 +188,21 @@ Each layer module contains or imports its own backward op structs. This makes it
 
 **No dependency on `mloptim` or `mltraining`.**
 `mllayers` is intentionally import-free of training infrastructure. Inference-only consumers can import `mllayers` alone and call `tape::no_grad` from `mlautograd` to skip tape recording entirely.
+
+## Cross-Cutting Concerns
+
+### Security
+- No unsafe code — all numeric ops delegate to `llmtensor` via `mlautograd::Tensor`
+- No external input; layers operate on in-process tensors only
+
+### Error Handling
+- `Layer::forward` returns `MlResult<Tensor>` — shape mismatches and invalid configs surface as errors, not panics
+- Builder types (`Conv1dBuilder`, `BatchNorm1dBuilder`) validate configuration at construction time — invalid configs are rejected before any computation
+
+### Performance
+- `tape::no_grad` from `mlautograd` skips tape recording entirely during inference — zero overhead per layer
+- Activation and normalization math is inlined — no vtable dispatch for GELU/SiLU/LayerNorm
+- `Layer` is object-safe; `Sequential` holds `Box<dyn Layer>` — one vtable dispatch per layer per forward pass, unavoidable for dynamic composition
 
 ## Integration Points
 
