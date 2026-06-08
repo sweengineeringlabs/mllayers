@@ -18,7 +18,6 @@ name = "basic_layers"
 path = "examples/basic_layers.rs"
 
 [dependencies]
-swe-ml-tensor = { package = "llmtensor", git = "https://github.com/sweengineeringlabs/llmtensor", rev = "3f2fb98" }
 mlautograd = { git = "https://github.com/sweengineeringlabs/mlautograd" }
 thiserror = "2"
 rand = "0.8"

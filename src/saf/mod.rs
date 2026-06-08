@@ -1,5 +1,9 @@
-pub use crate::api::traits::layer::Layer;
-pub use crate::api::types::activations::{GELU, ReLU, SiLU, Sigmoid, Tanh};
+pub use crate::api::Layer;
+pub use crate::api::LayerError;
+pub use crate::api::Validator;
+pub use crate::api::gelu_grad_elem;
+pub use crate::api::silu_grad_elem;
+pub use crate::api::types::activations::{Gelu, Relu, Silu, Sigmoid, Tanh};
 pub use crate::api::types::batch_norm1d::BatchNorm1d;
 pub use crate::api::types::batch_norm1d_builder::BatchNorm1dBuilder;
 pub use crate::api::types::conv1d::Conv1d;

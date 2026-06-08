@@ -13,15 +13,15 @@
 //! @covers: Dropout
 //! @covers: Sequential
 //! @covers: LoraLinear
-//! @covers: GELU
-//! @covers: ReLU
-//! @covers: SiLU
+//! @covers: Gelu
+//! @covers: Relu
+//! @covers: Silu
 //! @covers: Sigmoid
 //! @covers: Tanh
 
 use mllayers::{
-    BatchNorm1d, BatchNorm1dBuilder, Conv1d, Conv1dBuilder, Dropout, GELU, Layer, LayerNorm,
-    Linear, LoraLinear, ReLU, SiLU, Sequential, Sigmoid, Tanh,
+    BatchNorm1d, BatchNorm1dBuilder, Conv1d, Conv1dBuilder, Dropout, Gelu, Layer, LayerNorm,
+    Linear, LoraLinear, Relu, Silu, Sequential, Sigmoid, Tanh,
 };
 use mlautograd::Tensor;
 
@@ -102,7 +102,7 @@ fn test_dropout_eval_mode_passes_through() {
 fn test_sequential_chains_linear_and_relu() {
     let mut net = Sequential::new(vec![
         Box::new(Linear::new(4, 3)),
-        Box::new(ReLU::new()),
+        Box::new(Relu::new()),
     ]);
     let input = Tensor::randn([2, 4]);
     let output = net.forward(&input).expect("sequential forward");
@@ -138,7 +138,7 @@ fn test_lora_linear_only_exposes_lora_params() {
 
 #[test]
 fn test_gelu_forward_zero_input_gives_zero_output() {
-    let mut g = GELU::new();
+    let mut g = Gelu::new();
     let input = Tensor::from_vec(vec![0.0], vec![1]).expect("input");
     let output = g.forward(&input).expect("gelu forward");
     assert!(output.to_vec()[0].abs() < 1e-6);
@@ -146,7 +146,7 @@ fn test_gelu_forward_zero_input_gives_zero_output() {
 
 #[test]
 fn test_relu_forward_clamps_negatives_to_zero() {
-    let mut r = ReLU::new();
+    let mut r = Relu::new();
     let input = Tensor::from_vec(vec![-2.0, 0.0, 3.0], vec![3]).expect("input");
     let output = r.forward(&input).expect("relu forward");
     assert_eq!(output.to_vec(), vec![0.0, 0.0, 3.0]);
@@ -154,7 +154,7 @@ fn test_relu_forward_clamps_negatives_to_zero() {
 
 #[test]
 fn test_silu_forward_zero_gives_zero() {
-    let mut s = SiLU::new();
+    let mut s = Silu::new();
     let input = Tensor::from_vec(vec![0.0], vec![1]).expect("input");
     let output = s.forward(&input).expect("silu forward");
     assert!(output.to_vec()[0].abs() < 1e-6);

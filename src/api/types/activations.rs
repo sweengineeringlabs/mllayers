@@ -1,14 +1,5 @@
-/// GELU activation function (approximate).
-pub struct GELU;
-
-/// ReLU activation function.
-pub struct ReLU;
-
-/// SiLU (Swish) activation function.
-pub struct SiLU;
-
-/// Sigmoid activation function.
-pub struct Sigmoid;
-
-/// Tanh activation function.
-pub struct Tanh;
+pub use crate::api::types::gelu::Gelu;
+pub use crate::api::types::relu::Relu;
+pub use crate::api::types::silu::Silu;
+pub use crate::api::types::sigmoid::Sigmoid;
+pub use crate::api::types::tanh::Tanh;

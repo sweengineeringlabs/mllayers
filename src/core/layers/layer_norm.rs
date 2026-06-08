@@ -3,37 +3,6 @@ use crate::api::traits::layer::Layer;
 use crate::api::types::layer_norm::LayerNorm;
 
 impl LayerNorm {
-    pub fn new(normalized_shape: Vec<usize>) -> Self {
-        let total: usize = normalized_shape.iter().product();
-
-        let mut gamma = Tensor::ones([total]);
-        gamma.set_requires_grad(true);
-
-        let mut beta = Tensor::zeros([total]);
-        beta.set_requires_grad(true);
-
-        Self {
-            gamma,
-            beta,
-            normalized_shape,
-            eps: 1e-5,
-        }
-    }
-
-    pub fn with_eps(normalized_shape: Vec<usize>, eps: f32) -> Self {
-        let mut ln = Self::new(normalized_shape);
-        ln.eps = eps;
-        ln
-    }
-
-    pub fn eps(&self) -> f32 {
-        self.eps
-    }
-
-    pub fn normalized_shape(&self) -> &[usize] {
-        &self.normalized_shape
-    }
-
     fn compute(
         data: &[f32],
         gamma: &[f32],
@@ -73,11 +42,7 @@ impl Layer for LayerNorm {
 
         let last_dim = shape[ndim - 1];
         let norm_size: usize = self.normalized_shape.iter().product();
-        assert_eq!(
-            last_dim, norm_size,
-            "LayerNorm: last dim {} != normalized_shape product {}",
-            last_dim, norm_size
-        );
+        assert_eq!(last_dim, norm_size, "LayerNorm: last dim {} != normalized_shape product {}", last_dim, norm_size);
 
         let input_data = input.to_vec();
         let gamma_data = self.gamma.to_vec();
@@ -93,10 +58,7 @@ impl Layer for LayerNorm {
 
         if tape::is_recording() {
             let entry = TapeEntry {
-                backward_op: Box::new(LayerNormBackward {
-                    eps: self.eps,
-                    last_dim,
-                }),
+                backward_op: Box::new(LayerNormBackward { eps: self.eps, last_dim }),
                 output_id: output.id(),
                 input_ids: vec![input.id(), self.gamma.id(), self.beta.id()],
                 saved_tensors: vec![input.clone(), normalized, self.gamma.clone()],
@@ -107,13 +69,8 @@ impl Layer for LayerNorm {
         Ok(output)
     }
 
-    fn parameters(&self) -> Vec<&Tensor> {
-        vec![&self.gamma, &self.beta]
-    }
-
-    fn parameters_mut(&mut self) -> Vec<&mut Tensor> {
-        vec![&mut self.gamma, &mut self.beta]
-    }
+    fn parameters(&self) -> Vec<&Tensor> { vec![&self.gamma, &self.beta] }
+    fn parameters_mut(&mut self) -> Vec<&mut Tensor> { vec![&mut self.gamma, &mut self.beta] }
 }
 
 struct LayerNormBackward {
@@ -122,6 +79,10 @@ struct LayerNormBackward {
 }
 
 impl BackwardOp for LayerNormBackward {
+    fn name(&self) -> &str {
+        std::any::type_name::<Self>().split("::").last().unwrap_or("LayerNormBackward")
+    }
+
     fn backward(&self, grad_output: &Tensor, saved: &[Tensor]) -> Vec<Tensor> {
         let input = &saved[0];
         let x_hat = &saved[1];
@@ -169,45 +130,24 @@ impl BackwardOp for LayerNormBackward {
 
             for j in 0..last_dim {
                 grad_input_data[start + j] = inv_std / d
-                    * (d * dx_hat[j]
-                        - sum_dx_hat
-                        - x_hat_data[start + j] * sum_dx_hat_x_hat);
+                    * (d * dx_hat[j] - sum_dx_hat - x_hat_data[start + j] * sum_dx_hat_x_hat);
             }
         }
 
         let grad_input = Tensor::from_vec(grad_input_data, input.shape().to_vec())
             .expect("layer_norm grad_input");
-        let grad_gamma =
-            Tensor::from_vec(grad_gamma_data, vec![last_dim]).expect("layer_norm grad_gamma");
-        let grad_beta =
-            Tensor::from_vec(grad_beta_data, vec![last_dim]).expect("layer_norm grad_beta");
+        let grad_gamma = Tensor::from_vec(grad_gamma_data, vec![last_dim])
+            .expect("layer_norm grad_gamma");
+        let grad_beta = Tensor::from_vec(grad_beta_data, vec![last_dim])
+            .expect("layer_norm grad_beta");
 
         vec![grad_input, grad_gamma, grad_beta]
-    }
-
-    fn name(&self) -> &str {
-        "LayerNormBackward"
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // @covers: new
-    #[test]
-    fn test_new_creates_correct_params() {
-        let ln = LayerNorm::new(vec![4]);
-        assert_eq!(ln.normalized_shape(), &[4]);
-        assert_eq!(ln.parameters().len(), 2);
-    }
-
-    // @covers: with_eps
-    #[test]
-    fn test_with_eps_sets_custom_epsilon() {
-        let ln = LayerNorm::with_eps(vec![4], 1e-3);
-        assert!((ln.eps() - 1e-3).abs() < 1e-10);
-    }
 
     // @covers: forward
     #[test]
@@ -217,5 +157,19 @@ mod tests {
             .expect("input");
         let output = ln.forward(&input).expect("forward");
         assert_eq!(output.shape(), &[2, 3]);
+    }
+
+    // @covers: parameters
+    #[test]
+    fn test_parameters_returns_gamma_and_beta() {
+        let ln = LayerNorm::new(vec![4]);
+        assert_eq!(ln.parameters().len(), 2);
+    }
+
+    // @covers: parameters_mut
+    #[test]
+    fn test_parameters_mut_returns_gamma_and_beta() {
+        let mut ln = LayerNorm::new(vec![4]);
+        assert_eq!(ln.parameters_mut().len(), 2);
     }
 }

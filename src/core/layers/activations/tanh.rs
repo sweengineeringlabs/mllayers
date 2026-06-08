@@ -1,19 +1,7 @@
 use mlautograd::{MlResult, Tensor, TapeEntry, tape};
 use mlautograd::gradient::tanh::TanhBackward;
 use crate::api::traits::layer::Layer;
-use crate::api::types::activations::Tanh;
-
-impl Tanh {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-impl Default for Tanh {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+use crate::api::types::tanh::Tanh;
 
 impl Layer for Tanh {
     fn forward(&mut self, input: &Tensor) -> MlResult<Tensor> {
@@ -32,13 +20,8 @@ impl Layer for Tanh {
         Ok(output)
     }
 
-    fn parameters(&self) -> Vec<&Tensor> {
-        vec![]
-    }
-
-    fn parameters_mut(&mut self) -> Vec<&mut Tensor> {
-        vec![]
-    }
+    fn parameters(&self) -> Vec<&Tensor> { vec![] }
+    fn parameters_mut(&mut self) -> Vec<&mut Tensor> { vec![] }
 }
 
 #[cfg(test)]

@@ -1,19 +1,7 @@
 use mlautograd::{MlResult, Tensor, TapeEntry, tape};
 use mlautograd::gradient::sigmoid::SigmoidBackward;
 use crate::api::traits::layer::Layer;
-use crate::api::types::activations::Sigmoid;
-
-impl Sigmoid {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-impl Default for Sigmoid {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+use crate::api::types::sigmoid::Sigmoid;
 
 impl Layer for Sigmoid {
     fn forward(&mut self, input: &Tensor) -> MlResult<Tensor> {
@@ -32,13 +20,8 @@ impl Layer for Sigmoid {
         Ok(output)
     }
 
-    fn parameters(&self) -> Vec<&Tensor> {
-        vec![]
-    }
-
-    fn parameters_mut(&mut self) -> Vec<&mut Tensor> {
-        vec![]
-    }
+    fn parameters(&self) -> Vec<&Tensor> { vec![] }
+    fn parameters_mut(&mut self) -> Vec<&mut Tensor> { vec![] }
 }
 
 #[cfg(test)]

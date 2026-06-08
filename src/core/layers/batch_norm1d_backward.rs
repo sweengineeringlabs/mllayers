@@ -2,60 +2,15 @@ use mlautograd::{BackwardOp, MlError, MlResult, Tensor, TapeEntry, tape};
 use crate::api::traits::layer::Layer;
 use crate::api::types::batch_norm1d::BatchNorm1d;
 
-impl BatchNorm1d {
-    pub fn new(num_features: usize) -> Self {
-        let mut gamma = Tensor::ones([num_features]);
-        gamma.set_requires_grad(true);
-
-        let mut beta = Tensor::zeros([num_features]);
-        beta.set_requires_grad(true);
-
-        Self {
-            gamma,
-            beta,
-            running_mean: vec![0.0; num_features],
-            running_var: vec![1.0; num_features],
-            num_features,
-            eps: 1e-5,
-            momentum: 0.1,
-            training: true,
-        }
-    }
-
-    pub fn with_config(num_features: usize, eps: f32, momentum: f32) -> Self {
-        let mut bn = Self::new(num_features);
-        bn.eps = eps;
-        bn.momentum = momentum;
-        bn
-    }
-
-    pub fn train(&mut self) { self.training = true; }
-    pub fn eval(&mut self) { self.training = false; }
-    pub fn is_training(&self) -> bool { self.training }
-    pub fn eps(&self) -> f32 { self.eps }
-    pub fn momentum(&self) -> f32 { self.momentum }
-    pub fn num_features(&self) -> usize { self.num_features }
-    pub fn running_mean(&self) -> &[f32] { &self.running_mean }
-    pub fn running_var(&self) -> &[f32] { &self.running_var }
-}
-
 impl Layer for BatchNorm1d {
     fn forward(&mut self, input: &Tensor) -> MlResult<Tensor> {
         let shape = input.shape().to_vec();
         let ndim = shape.len();
-        assert!(
-            ndim == 2 || ndim == 3,
-            "BatchNorm1d: expected 2D or 3D input, got {}D",
-            ndim
-        );
+        assert!(ndim == 2 || ndim == 3, "BatchNorm1d: expected 2D or 3D input, got {}D", ndim);
 
         let batch_size = shape[0];
         let channels = shape[1];
-        assert_eq!(
-            channels, self.num_features,
-            "BatchNorm1d: expected {} features, got {}",
-            self.num_features, channels
-        );
+        assert_eq!(channels, self.num_features, "BatchNorm1d: expected {} features, got {}", self.num_features, channels);
 
         let spatial_size = if ndim == 3 { shape[2] } else { 1 };
         let count = batch_size * spatial_size;
@@ -160,13 +115,8 @@ impl Layer for BatchNorm1d {
         Ok(output)
     }
 
-    fn parameters(&self) -> Vec<&Tensor> {
-        vec![&self.gamma, &self.beta]
-    }
-
-    fn parameters_mut(&mut self) -> Vec<&mut Tensor> {
-        vec![&mut self.gamma, &mut self.beta]
-    }
+    fn parameters(&self) -> Vec<&Tensor> { vec![&self.gamma, &self.beta] }
+    fn parameters_mut(&mut self) -> Vec<&mut Tensor> { vec![&mut self.gamma, &mut self.beta] }
 }
 
 struct BatchNorm1dBackward {
@@ -177,6 +127,10 @@ struct BatchNorm1dBackward {
 }
 
 impl BackwardOp for BatchNorm1dBackward {
+    fn name(&self) -> &str {
+        std::any::type_name::<Self>().split("::").last().unwrap_or("BatchNorm1dBackward")
+    }
+
     fn backward(&self, grad_output: &Tensor, saved: &[Tensor]) -> Vec<Tensor> {
         let input = &saved[0];
         let x_hat = &saved[1];
@@ -228,9 +182,7 @@ impl BackwardOp for BatchNorm1dBackward {
                     let idx = b * channels * spatial_size + c * spatial_size + s;
                     let dx_hat = grad_data[idx] * g;
                     grad_input_data[idx] = inv_std / count_f
-                        * (count_f * dx_hat
-                            - sum_dx_hat
-                            - x_hat_data[idx] * sum_dx_hat_x_hat);
+                        * (count_f * dx_hat - sum_dx_hat - x_hat_data[idx] * sum_dx_hat_x_hat);
                 }
             }
         }
@@ -239,29 +191,16 @@ impl BackwardOp for BatchNorm1dBackward {
             .expect("batch_norm grad_input");
         let grad_gamma = Tensor::from_vec(grad_gamma_data, vec![channels])
             .expect("batch_norm grad_gamma");
-        let grad_beta =
-            Tensor::from_vec(grad_beta_data, vec![channels]).expect("batch_norm grad_beta");
+        let grad_beta = Tensor::from_vec(grad_beta_data, vec![channels])
+            .expect("batch_norm grad_beta");
 
         vec![grad_input, grad_gamma, grad_beta]
-    }
-
-    fn name(&self) -> &str {
-        "BatchNorm1dBackward"
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // @covers: new
-    #[test]
-    fn test_new_defaults_to_training_mode() {
-        let bn = BatchNorm1d::new(4);
-        assert_eq!(bn.num_features(), 4);
-        assert!(bn.is_training());
-        assert!((bn.eps() - 1e-5).abs() < 1e-10);
-    }
 
     // @covers: forward
     #[test]
@@ -272,19 +211,17 @@ mod tests {
         assert_eq!(output.shape(), &[4, 3]);
     }
 
-    // @covers: eval
+    // @covers: parameters
     #[test]
-    fn test_eval_disables_training_mode() {
-        let mut bn = BatchNorm1d::new(4);
-        bn.eval();
-        assert!(!bn.is_training());
+    fn test_parameters_returns_gamma_and_beta() {
+        let bn = BatchNorm1d::new(4);
+        assert_eq!(bn.parameters().len(), 2);
     }
 
-    // @covers: with_config
+    // @covers: parameters_mut
     #[test]
-    fn test_with_config_applies_eps_and_momentum() {
-        let bn = BatchNorm1d::with_config(4, 1e-3, 0.2);
-        assert!((bn.eps() - 1e-3).abs() < 1e-10);
-        assert!((bn.momentum() - 0.2).abs() < 1e-6);
+    fn test_parameters_mut_returns_gamma_and_beta() {
+        let mut bn = BatchNorm1d::new(4);
+        assert_eq!(bn.parameters_mut().len(), 2);
     }
 }

@@ -1,20 +1,8 @@
 use mlautograd::{MlResult, Tensor, TapeEntry, tape, ReLUBackward};
 use crate::api::traits::layer::Layer;
-use crate::api::types::activations::ReLU;
+use crate::api::types::relu::Relu;
 
-impl ReLU {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-impl Default for ReLU {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Layer for ReLU {
+impl Layer for Relu {
     fn forward(&mut self, input: &Tensor) -> MlResult<Tensor> {
         let output = input.relu_raw();
 
@@ -31,13 +19,8 @@ impl Layer for ReLU {
         Ok(output)
     }
 
-    fn parameters(&self) -> Vec<&Tensor> {
-        vec![]
-    }
-
-    fn parameters_mut(&mut self) -> Vec<&mut Tensor> {
-        vec![]
-    }
+    fn parameters(&self) -> Vec<&Tensor> { vec![] }
+    fn parameters_mut(&mut self) -> Vec<&mut Tensor> { vec![] }
 }
 
 #[cfg(test)]
@@ -47,7 +30,7 @@ mod tests {
     // @covers: forward
     #[test]
     fn test_forward_zeroes_negative_values() {
-        let mut relu = ReLU::new();
+        let mut relu = Relu::new();
         let input = Tensor::from_vec(vec![-1.0, 0.0, 1.0, 2.0], vec![4]).expect("input");
         let output = relu.forward(&input).expect("forward");
         assert_eq!(output.to_vec(), vec![0.0, 0.0, 1.0, 2.0]);
@@ -56,7 +39,7 @@ mod tests {
     // @covers: parameters
     #[test]
     fn test_parameters_returns_empty_vec() {
-        let relu = ReLU::new();
+        let relu = Relu::new();
         assert!(relu.parameters().is_empty());
     }
 }

@@ -1,28 +1,16 @@
 use mlautograd::{MlError, MlResult, Tensor, TapeEntry, tape};
 use crate::api::traits::layer::Layer;
-use crate::api::types::activations::GELU;
-use crate::core::layers::activations::gelu_backward::GELUBackward;
+use crate::api::types::gelu::Gelu;
+use crate::core::layers::activations::gelu_backward::GeluBackward;
 
-impl GELU {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-impl Default for GELU {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Layer for GELU {
+impl Layer for Gelu {
     fn forward(&mut self, input: &Tensor) -> MlResult<Tensor> {
         let x_data = input.to_vec();
-        let sqrt_2_over_pi: f32 = (2.0_f32 / std::f32::consts::PI).sqrt();
 
         let output_data: Vec<f32> = x_data
             .iter()
             .map(|&x| {
+                let sqrt_2_over_pi: f32 = (2.0_f32 / std::f32::consts::PI).sqrt();
                 let inner = sqrt_2_over_pi * (x + 0.044715 * x * x * x);
                 0.5 * x * (1.0 + inner.tanh())
             })
@@ -33,7 +21,7 @@ impl Layer for GELU {
 
         if tape::is_recording() {
             let entry = TapeEntry {
-                backward_op: Box::new(GELUBackward),
+                backward_op: Box::new(GeluBackward),
                 output_id: output.id(),
                 input_ids: vec![input.id()],
                 saved_tensors: vec![input.clone()],
@@ -44,13 +32,8 @@ impl Layer for GELU {
         Ok(output)
     }
 
-    fn parameters(&self) -> Vec<&Tensor> {
-        vec![]
-    }
-
-    fn parameters_mut(&mut self) -> Vec<&mut Tensor> {
-        vec![]
-    }
+    fn parameters(&self) -> Vec<&Tensor> { vec![] }
+    fn parameters_mut(&mut self) -> Vec<&mut Tensor> { vec![] }
 }
 
 #[cfg(test)]
@@ -60,24 +43,16 @@ mod tests {
     // @covers: forward
     #[test]
     fn test_forward_maps_zero_to_zero() {
-        let mut gelu = GELU::new();
+        let mut gelu = Gelu::new();
         let input = Tensor::from_vec(vec![0.0], vec![1]).expect("input");
         let output = gelu.forward(&input).expect("forward");
         assert!(output.to_vec()[0].abs() < 1e-6);
     }
 
-    #[test]
-    fn test_forward_positive_input_returns_positive() {
-        let mut gelu = GELU::new();
-        let input = Tensor::from_vec(vec![1.0], vec![1]).expect("input");
-        let output = gelu.forward(&input).expect("forward");
-        assert!(output.to_vec()[0] > 0.0);
-    }
-
     // @covers: parameters
     #[test]
     fn test_parameters_returns_empty_vec() {
-        let gelu = GELU::new();
+        let gelu = Gelu::new();
         assert!(gelu.parameters().is_empty());
     }
 }

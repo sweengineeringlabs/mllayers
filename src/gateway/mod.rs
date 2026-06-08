@@ -1,2 +1,4 @@
-// Gateway layer — ingress/egress adapters for external integrations.
-// Reserved for future use.
+pub(crate) mod ingress;
+pub(crate) mod egress;
+
+pub use crate::saf::*;

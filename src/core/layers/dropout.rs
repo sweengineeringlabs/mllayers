@@ -3,22 +3,6 @@ use crate::api::traits::layer::Layer;
 use crate::api::types::dropout::Dropout;
 use rand::Rng;
 
-impl Dropout {
-    pub fn new(p: f32) -> Self {
-        assert!(
-            (0.0..1.0).contains(&p),
-            "Dropout probability must be in [0, 1), got {}",
-            p
-        );
-        Self { p, training: true }
-    }
-
-    pub fn train(&mut self) { self.training = true; }
-    pub fn eval(&mut self) { self.training = false; }
-    pub fn is_training(&self) -> bool { self.training }
-    pub fn p(&self) -> f32 { self.p }
-}
-
 impl Layer for Dropout {
     fn forward(&mut self, input: &Tensor) -> MlResult<Tensor> {
         if !self.training || self.p == 0.0 {
@@ -58,26 +42,20 @@ impl Layer for Dropout {
 struct DropoutBackward;
 
 impl BackwardOp for DropoutBackward {
+    fn name(&self) -> &str {
+        std::any::type_name::<Self>().split("::").last().unwrap_or("DropoutBackward")
+    }
+
     fn backward(&self, grad_output: &Tensor, saved: &[Tensor]) -> Vec<Tensor> {
         let mask = &saved[0];
         let grad_input = grad_output.mul_raw(mask).expect("dropout backward mul");
         vec![grad_input]
     }
-
-    fn name(&self) -> &str { "DropoutBackward" }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // @covers: new
-    #[test]
-    fn test_new_stores_probability_and_defaults_to_training() {
-        let d = Dropout::new(0.3);
-        assert!((d.p() - 0.3).abs() < f32::EPSILON);
-        assert!(d.is_training());
-    }
 
     // @covers: forward
     #[test]
@@ -89,11 +67,17 @@ mod tests {
         assert_eq!(output.to_vec(), vec![1.0, 2.0, 3.0]);
     }
 
-    // @covers: eval
+    // @covers: parameters
     #[test]
-    fn test_eval_disables_training_mode() {
+    fn test_parameters_returns_empty_vec() {
+        let d = Dropout::new(0.5);
+        assert!(d.parameters().is_empty());
+    }
+
+    // @covers: parameters_mut
+    #[test]
+    fn test_parameters_mut_returns_empty_vec() {
         let mut d = Dropout::new(0.5);
-        d.eval();
-        assert!(!d.is_training());
+        assert!(d.parameters_mut().is_empty());
     }
 }

@@ -2,43 +2,6 @@ use mlautograd::{BackwardOp, MlError, MlResult, Tensor, TapeEntry, tape};
 use crate::api::traits::layer::Layer;
 use crate::api::types::conv1d::Conv1d;
 
-impl Conv1d {
-    pub fn new(in_channels: usize, out_channels: usize, kernel_size: usize) -> Self {
-        let fan_in = in_channels * kernel_size;
-        let fan_out = out_channels * kernel_size;
-        let scale = (6.0 / (fan_in + fan_out) as f32).sqrt();
-
-        let mut weight = Tensor::randn([out_channels, in_channels, kernel_size]);
-        weight = weight.mul_scalar_raw(scale);
-        weight.set_requires_grad(true);
-
-        let mut bias = Tensor::zeros([out_channels]);
-        bias.set_requires_grad(true);
-
-        Self {
-            weight,
-            bias,
-            in_channels,
-            out_channels,
-            kernel_size,
-            stride: 1,
-            padding: 0,
-            dilation: 1,
-        }
-    }
-
-    pub fn with_stride(mut self, stride: usize) -> Self { self.stride = stride; self }
-    pub fn with_padding(mut self, padding: usize) -> Self { self.padding = padding; self }
-    pub fn with_dilation(mut self, dilation: usize) -> Self { self.dilation = dilation; self }
-
-    pub fn in_channels(&self) -> usize { self.in_channels }
-    pub fn out_channels(&self) -> usize { self.out_channels }
-    pub fn kernel_size(&self) -> usize { self.kernel_size }
-    pub fn stride(&self) -> usize { self.stride }
-    pub fn padding(&self) -> usize { self.padding }
-    pub fn dilation(&self) -> usize { self.dilation }
-}
-
 impl Layer for Conv1d {
     fn forward(&mut self, input: &Tensor) -> MlResult<Tensor> {
         let input_shape = input.shape().to_vec();
@@ -68,30 +31,24 @@ impl Layer for Conv1d {
                     let mut sum = bias_data[oc];
                     for ic in 0..self.in_channels {
                         for k in 0..self.kernel_size {
-                            let input_pos =
-                                (o * self.stride + k * self.dilation) as isize
-                                    - self.padding as isize;
+                            let input_pos = (o * self.stride + k * self.dilation) as isize
+                                - self.padding as isize;
                             if input_pos >= 0 && (input_pos as usize) < length {
-                                let input_idx = b * in_ch * length
-                                    + ic * length
-                                    + input_pos as usize;
+                                let input_idx = b * in_ch * length + ic * length + input_pos as usize;
                                 let weight_idx = oc * self.in_channels * self.kernel_size
-                                    + ic * self.kernel_size
-                                    + k;
+                                    + ic * self.kernel_size + k;
                                 sum += input_data[input_idx] * weight_data[weight_idx];
                             }
                         }
                     }
-                    let output_idx =
-                        b * self.out_channels * out_length + oc * out_length + o;
+                    let output_idx = b * self.out_channels * out_length + oc * out_length + o;
                     output_data[output_idx] = sum;
                 }
             }
         }
 
-        let output =
-            Tensor::from_vec(output_data, vec![batch, self.out_channels, out_length])
-                .map_err(MlError::TensorError)?;
+        let output = Tensor::from_vec(output_data, vec![batch, self.out_channels, out_length])
+            .map_err(MlError::TensorError)?;
 
         if tape::is_recording() {
             let entry = TapeEntry {
@@ -114,13 +71,8 @@ impl Layer for Conv1d {
         Ok(output)
     }
 
-    fn parameters(&self) -> Vec<&Tensor> {
-        vec![&self.weight, &self.bias]
-    }
-
-    fn parameters_mut(&mut self) -> Vec<&mut Tensor> {
-        vec![&mut self.weight, &mut self.bias]
-    }
+    fn parameters(&self) -> Vec<&Tensor> { vec![&self.weight, &self.bias] }
+    fn parameters_mut(&mut self) -> Vec<&mut Tensor> { vec![&mut self.weight, &mut self.bias] }
 }
 
 struct Conv1dBackward {
@@ -134,6 +86,10 @@ struct Conv1dBackward {
 }
 
 impl BackwardOp for Conv1dBackward {
+    fn name(&self) -> &str {
+        std::any::type_name::<Self>().split("::").last().unwrap_or("Conv1dBackward")
+    }
+
     fn backward(&self, grad_output: &Tensor, saved: &[Tensor]) -> Vec<Tensor> {
         let input = &saved[0];
         let weight = &saved[1];
@@ -164,22 +120,16 @@ impl BackwardOp for Conv1dBackward {
         for b in 0..batch {
             for oc in 0..self.out_channels {
                 for o in 0..out_length {
-                    let grad_idx =
-                        b * self.out_channels * out_length + oc * out_length + o;
+                    let grad_idx = b * self.out_channels * out_length + oc * out_length + o;
                     let g = grad_data[grad_idx];
                     for ic in 0..self.in_channels {
                         for k in 0..self.kernel_size {
-                            let input_pos = (o * self.stride + k * self.dilation)
-                                as isize
+                            let input_pos = (o * self.stride + k * self.dilation) as isize
                                 - self.padding as isize;
                             if input_pos >= 0 && (input_pos as usize) < length {
-                                let input_idx = b * in_ch * length
-                                    + ic * length
-                                    + input_pos as usize;
-                                let w_idx =
-                                    oc * self.in_channels * self.kernel_size
-                                        + ic * self.kernel_size
-                                        + k;
+                                let input_idx = b * in_ch * length + ic * length + input_pos as usize;
+                                let w_idx = oc * self.in_channels * self.kernel_size
+                                    + ic * self.kernel_size + k;
                                 grad_weight_data[w_idx] += g * input_data[input_idx];
                             }
                         }
@@ -195,22 +145,15 @@ impl BackwardOp for Conv1dBackward {
                     let mut sum = 0.0f32;
                     for oc in 0..self.out_channels {
                         for k in 0..self.kernel_size {
-                            let numerator =
-                                p as isize + self.padding as isize
-                                    - (k * self.dilation) as isize;
-                            if numerator >= 0
-                                && numerator as usize % self.stride == 0
-                            {
+                            let numerator = p as isize + self.padding as isize
+                                - (k * self.dilation) as isize;
+                            if numerator >= 0 && numerator as usize % self.stride == 0 {
                                 let o = numerator as usize / self.stride;
                                 if o < out_length {
-                                    let grad_idx = b * self.out_channels
-                                        * out_length
-                                        + oc * out_length
-                                        + o;
-                                    let w_idx = oc * self.in_channels
-                                        * self.kernel_size
-                                        + ic * self.kernel_size
-                                        + k;
+                                    let grad_idx = b * self.out_channels * out_length
+                                        + oc * out_length + o;
+                                    let w_idx = oc * self.in_channels * self.kernel_size
+                                        + ic * self.kernel_size + k;
                                     sum += grad_data[grad_idx] * weight_data[w_idx];
                                 }
                             }
@@ -222,37 +165,22 @@ impl BackwardOp for Conv1dBackward {
             }
         }
 
-        let grad_input =
-            Tensor::from_vec(grad_input_data, self.input_shape.clone())
-                .expect("conv1d grad_input");
+        let grad_input = Tensor::from_vec(grad_input_data, self.input_shape.clone())
+            .expect("conv1d grad_input");
         let grad_weight = Tensor::from_vec(
             grad_weight_data,
             vec![self.out_channels, self.in_channels, self.kernel_size],
-        )
-        .expect("conv1d grad_weight");
+        ).expect("conv1d grad_weight");
         let grad_bias = Tensor::from_vec(grad_bias_data, vec![self.out_channels])
             .expect("conv1d grad_bias");
 
         vec![grad_input, grad_weight, grad_bias]
-    }
-
-    fn name(&self) -> &str {
-        "Conv1dBackward"
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // @covers: new
-    #[test]
-    fn test_new_creates_correct_parameter_shapes() {
-        let layer = Conv1d::new(3, 8, 5);
-        assert_eq!(layer.in_channels(), 3);
-        assert_eq!(layer.out_channels(), 8);
-        assert_eq!(layer.kernel_size(), 5);
-    }
 
     // @covers: forward
     #[test]
@@ -263,17 +191,17 @@ mod tests {
         assert_eq!(output.shape(), &[1, 4, 8]);
     }
 
-    // @covers: with_stride
+    // @covers: parameters
     #[test]
-    fn test_with_stride_updates_stride() {
-        let layer = Conv1d::new(2, 4, 3).with_stride(2);
-        assert_eq!(layer.stride(), 2);
+    fn test_parameters_returns_weight_and_bias() {
+        let layer = Conv1d::new(3, 8, 5);
+        assert_eq!(layer.parameters().len(), 2);
     }
 
-    // @covers: with_padding
+    // @covers: parameters_mut
     #[test]
-    fn test_with_padding_updates_padding() {
-        let layer = Conv1d::new(2, 4, 3).with_padding(1);
-        assert_eq!(layer.padding(), 1);
+    fn test_parameters_mut_returns_weight_and_bias() {
+        let mut layer = Conv1d::new(3, 8, 5);
+        assert_eq!(layer.parameters_mut().len(), 2);
     }
 }

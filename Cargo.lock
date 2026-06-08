@@ -522,7 +522,6 @@ dependencies = [
 name = "mllayers"
 version = "0.1.0"
 dependencies = [
- "llmtensor",
  "mlautograd",
  "rand",
  "thiserror 2.0.18",

@@ -1,14 +1,14 @@
 //! Basic layers example — demonstrates creating and running forward passes
-//! through Linear, ReLU, and Sequential layers.
+//! through Linear, Relu, and Sequential layers.
 
-use mllayers::{Layer, Linear, ReLU, Sequential};
+use mllayers::{Layer, Linear, Relu, Sequential};
 use mlautograd::Tensor;
 
 fn main() {
-    // Build a simple MLP: Linear(4 -> 3) -> ReLU -> Linear(3 -> 2)
+    // Build a simple MLP: Linear(4 -> 3) -> Relu -> Linear(3 -> 2)
     let net = Sequential::new(vec![
         Box::new(Linear::new(4, 3)),
-        Box::new(ReLU::new()),
+        Box::new(Relu::new()),
         Box::new(Linear::new(3, 2)),
     ]);
 
