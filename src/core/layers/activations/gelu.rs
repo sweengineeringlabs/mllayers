@@ -1,8 +1,7 @@
 use mlautograd::{MlError, MlResult, Tensor, TapeEntry, tape};
-use crate::api::layer::Layer;
+use crate::api::traits::layer::Layer;
+use crate::api::types::activations::GELU;
 use crate::core::layers::activations::gelu_backward::GELUBackward;
-
-pub struct GELU;
 
 impl GELU {
     pub fn new() -> Self {
@@ -58,24 +57,26 @@ impl Layer for GELU {
 mod tests {
     use super::*;
 
+    // @covers: forward
     #[test]
-    fn test_gelu_forward_maps_zero_to_zero() {
+    fn test_forward_maps_zero_to_zero() {
         let mut gelu = GELU::new();
-        let input = Tensor::from_vec(vec![0.0], vec![1]).unwrap();
-        let output = gelu.forward(&input).unwrap();
+        let input = Tensor::from_vec(vec![0.0], vec![1]).expect("input");
+        let output = gelu.forward(&input).expect("forward");
         assert!(output.to_vec()[0].abs() < 1e-6);
     }
 
     #[test]
-    fn test_gelu_forward_positive_input_returns_positive() {
+    fn test_forward_positive_input_returns_positive() {
         let mut gelu = GELU::new();
-        let input = Tensor::from_vec(vec![1.0], vec![1]).unwrap();
-        let output = gelu.forward(&input).unwrap();
+        let input = Tensor::from_vec(vec![1.0], vec![1]).expect("input");
+        let output = gelu.forward(&input).expect("forward");
         assert!(output.to_vec()[0] > 0.0);
     }
 
+    // @covers: parameters
     #[test]
-    fn test_gelu_has_no_parameters() {
+    fn test_parameters_returns_empty_vec() {
         let gelu = GELU::new();
         assert!(gelu.parameters().is_empty());
     }

@@ -1,12 +1,7 @@
 use mlautograd::{BackwardOp, MlError, MlResult, Tensor, TapeEntry, tape};
-use crate::api::layer::Layer;
+use crate::api::traits::layer::Layer;
+use crate::api::types::dropout::Dropout;
 use rand::Rng;
-
-/// Dropout layer with inverted dropout scaling.
-pub struct Dropout {
-    p: f32,
-    training: bool,
-}
 
 impl Dropout {
     pub fn new(p: f32) -> Self {
@@ -76,19 +71,29 @@ impl BackwardOp for DropoutBackward {
 mod tests {
     use super::*;
 
+    // @covers: new
     #[test]
-    fn test_dropout_new_stores_probability() {
+    fn test_new_stores_probability_and_defaults_to_training() {
         let d = Dropout::new(0.3);
         assert!((d.p() - 0.3).abs() < f32::EPSILON);
         assert!(d.is_training());
     }
 
+    // @covers: forward
     #[test]
-    fn test_dropout_eval_mode_passes_through_unchanged() {
+    fn test_forward_eval_mode_passes_through_unchanged() {
         let mut d = Dropout::new(0.5);
         d.eval();
-        let input = Tensor::from_vec(vec![1.0, 2.0, 3.0], vec![3]).unwrap();
-        let output = d.forward(&input).unwrap();
+        let input = Tensor::from_vec(vec![1.0, 2.0, 3.0], vec![3]).expect("input");
+        let output = d.forward(&input).expect("forward");
         assert_eq!(output.to_vec(), vec![1.0, 2.0, 3.0]);
+    }
+
+    // @covers: eval
+    #[test]
+    fn test_eval_disables_training_mode() {
+        let mut d = Dropout::new(0.5);
+        d.eval();
+        assert!(!d.is_training());
     }
 }

@@ -1,13 +1,5 @@
-use super::conv1d::Conv1d;
-
-pub struct Conv1dBuilder {
-    in_channels: usize,
-    out_channels: usize,
-    kernel_size: usize,
-    stride: usize,
-    padding: usize,
-    dilation: usize,
-}
+use crate::api::types::conv1d::Conv1d;
+use crate::api::types::conv1d_builder::Conv1dBuilder;
 
 impl Conv1dBuilder {
     pub fn new(in_channels: usize, out_channels: usize, kernel_size: usize) -> Self {
@@ -37,16 +29,18 @@ impl Conv1dBuilder {
 mod tests {
     use super::*;
 
+    // @covers: new
     #[test]
-    fn test_conv1d_builder_defaults() {
+    fn test_new_uses_default_stride_padding_dilation() {
         let layer = Conv1dBuilder::new(3, 8, 5).build();
         assert_eq!(layer.stride(), 1);
         assert_eq!(layer.padding(), 0);
         assert_eq!(layer.dilation(), 1);
     }
 
+    // @covers: build
     #[test]
-    fn test_conv1d_builder_custom_config() {
+    fn test_build_applies_custom_config() {
         let layer = Conv1dBuilder::new(2, 4, 3).stride(2).padding(1).dilation(2).build();
         assert_eq!(layer.stride(), 2);
         assert_eq!(layer.padding(), 1);

@@ -1,17 +1,6 @@
 use mlautograd::{BackwardOp, MlError, MlResult, Tensor, TapeEntry, tape};
-use crate::api::layer::Layer;
-
-/// 1-D convolutional layer.
-pub struct Conv1d {
-    weight: Tensor,
-    bias: Tensor,
-    in_channels: usize,
-    out_channels: usize,
-    kernel_size: usize,
-    stride: usize,
-    padding: usize,
-    dilation: usize,
-}
+use crate::api::traits::layer::Layer;
+use crate::api::types::conv1d::Conv1d;
 
 impl Conv1d {
     pub fn new(in_channels: usize, out_channels: usize, kernel_size: usize) -> Self {
@@ -256,19 +245,35 @@ impl BackwardOp for Conv1dBackward {
 mod tests {
     use super::*;
 
+    // @covers: new
     #[test]
-    fn test_conv1d_new_creates_correct_parameter_shapes() {
+    fn test_new_creates_correct_parameter_shapes() {
         let layer = Conv1d::new(3, 8, 5);
         assert_eq!(layer.in_channels(), 3);
         assert_eq!(layer.out_channels(), 8);
         assert_eq!(layer.kernel_size(), 5);
     }
 
+    // @covers: forward
     #[test]
-    fn test_conv1d_forward_output_shape() {
+    fn test_forward_output_shape() {
         let mut layer = Conv1d::new(2, 4, 3);
         let input = Tensor::randn([1, 2, 10]);
-        let output = layer.forward(&input).unwrap();
+        let output = layer.forward(&input).expect("forward");
         assert_eq!(output.shape(), &[1, 4, 8]);
+    }
+
+    // @covers: with_stride
+    #[test]
+    fn test_with_stride_updates_stride() {
+        let layer = Conv1d::new(2, 4, 3).with_stride(2);
+        assert_eq!(layer.stride(), 2);
+    }
+
+    // @covers: with_padding
+    #[test]
+    fn test_with_padding_updates_padding() {
+        let layer = Conv1d::new(2, 4, 3).with_padding(1);
+        assert_eq!(layer.padding(), 1);
     }
 }

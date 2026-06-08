@@ -1,7 +1,6 @@
 use mlautograd::{MlResult, Tensor, TapeEntry, tape, ReLUBackward};
-use crate::api::layer::Layer;
-
-pub struct ReLU;
+use crate::api::traits::layer::Layer;
+use crate::api::types::activations::ReLU;
 
 impl ReLU {
     pub fn new() -> Self {
@@ -45,16 +44,18 @@ impl Layer for ReLU {
 mod tests {
     use super::*;
 
+    // @covers: forward
     #[test]
-    fn test_relu_forward_zeroes_negative_values() {
+    fn test_forward_zeroes_negative_values() {
         let mut relu = ReLU::new();
-        let input = Tensor::from_vec(vec![-1.0, 0.0, 1.0, 2.0], vec![4]).unwrap();
-        let output = relu.forward(&input).unwrap();
+        let input = Tensor::from_vec(vec![-1.0, 0.0, 1.0, 2.0], vec![4]).expect("input");
+        let output = relu.forward(&input).expect("forward");
         assert_eq!(output.to_vec(), vec![0.0, 0.0, 1.0, 2.0]);
     }
 
+    // @covers: parameters
     #[test]
-    fn test_relu_has_no_parameters() {
+    fn test_parameters_returns_empty_vec() {
         let relu = ReLU::new();
         assert!(relu.parameters().is_empty());
     }

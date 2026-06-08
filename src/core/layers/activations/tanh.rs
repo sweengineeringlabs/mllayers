@@ -1,8 +1,7 @@
 use mlautograd::{MlResult, Tensor, TapeEntry, tape};
 use mlautograd::gradient::tanh::TanhBackward;
-use crate::api::layer::Layer;
-
-pub struct Tanh;
+use crate::api::traits::layer::Layer;
+use crate::api::types::activations::Tanh;
 
 impl Tanh {
     pub fn new() -> Self {
@@ -46,16 +45,18 @@ impl Layer for Tanh {
 mod tests {
     use super::*;
 
+    // @covers: forward
     #[test]
-    fn test_tanh_forward_maps_zero_to_zero() {
+    fn test_forward_maps_zero_to_zero() {
         let mut tanh_layer = Tanh::new();
-        let input = Tensor::from_vec(vec![0.0], vec![1]).unwrap();
-        let output = tanh_layer.forward(&input).unwrap();
+        let input = Tensor::from_vec(vec![0.0], vec![1]).expect("input");
+        let output = tanh_layer.forward(&input).expect("forward");
         assert!(output.to_vec()[0].abs() < 1e-6);
     }
 
+    // @covers: parameters
     #[test]
-    fn test_tanh_has_no_parameters() {
+    fn test_parameters_returns_empty_vec() {
         let t = Tanh::new();
         assert!(t.parameters().is_empty());
     }

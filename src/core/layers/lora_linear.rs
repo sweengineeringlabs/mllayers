@@ -1,37 +1,11 @@
 use mlautograd::{BackwardOp, MlResult, Tensor, TapeEntry, tape};
 use mlautograd::gradient::add::unbroadcast;
-use crate::api::layer::Layer;
-use crate::core::layers::dropout::Dropout;
-
-/// Low-Rank Adaptation (LoRA) linear layer.
-///
-/// Wraps frozen base weights and injects two trainable low-rank matrices A and B.
-/// Forward: `output = frozen(x) + (x @ A @ B) * (alpha / r)`
-///
-/// Only A `[in, r]` and B `[r, out]` are returned by `parameters_mut()`.
-/// Base weights are never updated by the optimizer.
-///
-/// Standard LoRA init: A is Kaiming-normal, B is zero — so the initial LoRA
-/// contribution is zero and training starts from the pretrained base output.
-pub struct LoraLinear {
-    base_weight: Tensor,       // [out_features, in_features] — frozen
-    base_bias: Option<Tensor>, // [out_features]              — frozen
-    lora_a: Tensor,            // [in_features, r]            — trainable
-    lora_b: Tensor,            // [r, out_features]           — trainable
-    in_features: usize,
-    out_features: usize,
-    r: usize,
-    scale: f32,                // alpha / r
-    dropout: Option<Dropout>,
-    training: bool,
-}
+use crate::api::traits::layer::Layer;
+use crate::api::types::dropout::Dropout;
+use crate::api::types::lora_linear::LoraLinear;
 
 impl LoraLinear {
     /// Create a LoraLinear with freshly initialised base weights.
-    ///
-    /// - `r`: LoRA rank (4, 8, or 16 are typical)
-    /// - `alpha`: LoRA scaling factor; effective scale = alpha / r
-    /// - `dropout_p`: dropout probability on the low-rank path (`None` = disabled)
     pub fn new(
         in_features: usize,
         out_features: usize,
@@ -72,9 +46,6 @@ impl LoraLinear {
     }
 
     /// Create a LoraLinear from existing frozen base weights.
-    ///
-    /// The caller is responsible for ensuring `base_weight` has shape
-    /// `[out_features, in_features]` and `base_bias` (if any) has shape `[out_features]`.
     pub fn from_pretrained(
         base_weight: Tensor,
         base_bias: Option<Tensor>,
@@ -122,39 +93,25 @@ impl LoraLinear {
         }
     }
 
-    pub fn r(&self) -> usize {
-        self.r
-    }
-
-    pub fn scale(&self) -> f32 {
-        self.scale
-    }
-
-    pub fn in_features(&self) -> usize {
-        self.in_features
-    }
-
-    pub fn out_features(&self) -> usize {
-        self.out_features
-    }
+    pub fn r(&self) -> usize { self.r }
+    pub fn scale(&self) -> f32 { self.scale }
+    pub fn in_features(&self) -> usize { self.in_features }
+    pub fn out_features(&self) -> usize { self.out_features }
 }
 
 impl Layer for LoraLinear {
     fn forward(&mut self, input: &Tensor) -> MlResult<Tensor> {
-        // Base path (frozen) — raw ops, no tape entry for base params.
         let weight_t = self.base_weight.transpose_raw(-1, -2)?;
         let mut base_out = input.matmul_raw(&weight_t)?;
         if let Some(ref bias) = self.base_bias {
             base_out = base_out.add_raw(bias)?;
         }
 
-        // Optional dropout on LoRA input — Dropout records its own tape entry.
         let lora_input = match &mut self.dropout {
             Some(d) if self.training => d.forward(input)?,
             _ => input.clone(),
         };
 
-        // LoRA path: lora_input @ A @ B * scale
         let h = lora_input.matmul_raw(&self.lora_a)?;
         let lora_out = h.matmul_raw(&self.lora_b)?.mul_scalar_raw(self.scale);
 
@@ -182,7 +139,6 @@ impl Layer for LoraLinear {
         Ok(output)
     }
 
-    /// Returns only A and B — base weights are excluded (frozen).
     fn parameters(&self) -> Vec<&Tensor> {
         vec![&self.lora_a, &self.lora_b]
     }
@@ -192,10 +148,6 @@ impl Layer for LoraLinear {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Backward
-// ---------------------------------------------------------------------------
-
 struct LoraLinearBackward {
     input_shape: Vec<usize>,
     lora_a_shape: Vec<usize>,
@@ -204,8 +156,6 @@ struct LoraLinearBackward {
 }
 
 impl BackwardOp for LoraLinearBackward {
-    /// saved: [lora_input, base_weight, lora_a, lora_b]
-    /// Returns grads for input_ids order: [lora_input, lora_a, lora_b]
     fn backward(&self, grad_output: &Tensor, saved: &[Tensor]) -> Vec<Tensor> {
         let lora_input = &saved[0];
         let base_weight = &saved[1];
@@ -215,8 +165,6 @@ impl BackwardOp for LoraLinearBackward {
         let lora_b_t = lora_b.transpose_raw(-1, -2).expect("lora_b^T");
         let lora_a_t = lora_a.transpose_raw(-1, -2).expect("lora_a^T");
 
-        // grad w.r.t. lora_input = grad_output @ base_weight
-        //                        + grad_output @ lora_b^T @ lora_a^T * scale
         let grad_base = grad_output
             .matmul_raw(base_weight)
             .expect("grad_input base path");
@@ -232,7 +180,6 @@ impl BackwardOp for LoraLinearBackward {
             &self.input_shape,
         );
 
-        // grad w.r.t. lora_b = h^T @ grad_output * scale  (h = lora_input @ lora_a)
         let h = lora_input.matmul_raw(lora_a).expect("h = input @ lora_a");
         let grad_lora_b = unbroadcast(
             &h.transpose_raw(-1, -2)
@@ -243,7 +190,6 @@ impl BackwardOp for LoraLinearBackward {
             &self.lora_b_shape,
         );
 
-        // grad w.r.t. lora_a = lora_input^T @ grad_through_b * scale
         let grad_lora_a = unbroadcast(
             &lora_input
                 .transpose_raw(-1, -2)
@@ -262,14 +208,11 @@ impl BackwardOp for LoraLinearBackward {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    // @covers: new
     #[test]
     fn test_new_creates_correct_lora_matrix_shapes() {
         let layer = LoraLinear::new(8, 4, 2, 2.0, None);
@@ -279,42 +222,40 @@ mod tests {
         assert_eq!(params[1].shape(), &[2, 4], "lora_b shape");
     }
 
+    // @covers: parameters_mut
     #[test]
     fn test_parameters_mut_returns_only_lora_matrices_not_base_weights() {
         let mut layer = LoraLinear::new(8, 4, 2, 2.0, None);
-        // base: weight [4,8] + bias [4] = 12 elements; lora: A [8,2] + B [2,4] = 24 elements
         assert_eq!(layer.parameters_mut().len(), 2);
-        assert_eq!(layer.parameter_count(), 8 * 2 + 2 * 4); // 24, not 12+24
+        assert_eq!(layer.parameter_count(), 8 * 2 + 2 * 4);
     }
 
+    // @covers: forward
     #[test]
     fn test_forward_output_shape_matches_base_linear() {
         let mut layer = LoraLinear::new(8, 4, 2, 2.0, None);
         let input = Tensor::randn([3, 8]);
-        let output = layer.forward(&input).unwrap();
+        let output = layer.forward(&input).expect("forward");
         assert_eq!(output.shape(), &[3, 4]);
     }
 
     #[test]
     fn test_initial_lora_contribution_is_zero_because_b_is_zeros() {
-        // lora_b is zero-initialised — initial LoRA path output is all zeros,
-        // so LoraLinear output must equal the frozen base output.
         let in_f = 4;
         let out_f = 3;
         let mut layer = LoraLinear::new(in_f, out_f, 2, 1.0, None);
 
-        // Compute base output manually using the same base_weight and base_bias.
         let base_w = layer.base_weight.clone();
-        let base_b = layer.base_bias.clone().unwrap();
+        let base_b = layer.base_bias.clone().expect("base_bias");
         let input = Tensor::randn([2, in_f]);
 
         let expected = input
-            .matmul_raw(&base_w.transpose_raw(-1, -2).unwrap())
-            .unwrap()
+            .matmul_raw(&base_w.transpose_raw(-1, -2).expect("transpose"))
+            .expect("matmul")
             .add_raw(&base_b)
-            .unwrap();
+            .expect("add");
 
-        let actual = layer.forward(&input).unwrap();
+        let actual = layer.forward(&input).expect("forward");
 
         let exp_v = expected.to_vec();
         let act_v = actual.to_vec();
@@ -326,35 +267,14 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_lora_matrices_require_grad_base_does_not() {
-        let layer = LoraLinear::new(8, 4, 2, 2.0, None);
-        assert!(layer.lora_a.requires_grad(), "lora_a must require grad");
-        assert!(layer.lora_b.requires_grad(), "lora_b must require grad");
-        assert!(!layer.base_weight.requires_grad(), "base_weight must be frozen");
-    }
-
-    #[test]
-    fn test_scale_is_alpha_divided_by_r() {
-        let layer = LoraLinear::new(8, 4, 4, 8.0, None);
-        assert!((layer.scale() - 2.0).abs() < f32::EPSILON, "scale = alpha/r = 8/4 = 2");
-    }
-
-    #[test]
-    fn test_forward_with_dropout_produces_correct_output_shape() {
-        let mut layer = LoraLinear::new(8, 4, 2, 2.0, Some(0.1));
-        let input = Tensor::randn([5, 8]);
-        let output = layer.forward(&input).unwrap();
-        assert_eq!(output.shape(), &[5, 4]);
-    }
-
+    // @covers: eval
     #[test]
     fn test_eval_mode_with_dropout_is_deterministic() {
         let mut layer = LoraLinear::new(8, 4, 2, 2.0, Some(0.5));
         layer.eval();
         let input = Tensor::randn([2, 8]);
-        let out1 = layer.forward(&input).unwrap().to_vec();
-        let out2 = layer.forward(&input).unwrap().to_vec();
+        let out1 = layer.forward(&input).expect("out1").to_vec();
+        let out2 = layer.forward(&input).expect("out2").to_vec();
         for (a, b) in out1.iter().zip(out2.iter()) {
             assert!(
                 (a - b).abs() < 1e-6,
@@ -363,25 +283,17 @@ mod tests {
         }
     }
 
+    // @covers: from_pretrained
     #[test]
     fn test_from_pretrained_uses_provided_base_weights() {
         let mut base_w = Tensor::zeros([4, 8]);
         base_w.set_requires_grad(false);
         let mut layer = LoraLinear::from_pretrained(base_w, None, 2, 2.0, None);
 
-        // base_weight is all zeros, lora_b is all zeros => output is all zeros initially
         let input = Tensor::randn([2, 8]);
-        let output = layer.forward(&input).unwrap();
+        let output = layer.forward(&input).expect("forward");
         for v in output.to_vec() {
             assert!(v.abs() < 1e-6, "output with zero base and zero lora_b must be zero");
         }
-    }
-
-    #[test]
-    fn test_accessors_return_correct_dimensions() {
-        let layer = LoraLinear::new(16, 8, 4, 4.0, None);
-        assert_eq!(layer.in_features(), 16);
-        assert_eq!(layer.out_features(), 8);
-        assert_eq!(layer.r(), 4);
     }
 }

@@ -2,17 +2,31 @@
 name = "mllayers"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
 license = "MIT OR Apache-2.0"
 authors = ["sweengineeringlabs <engineers@swelabs.io>"]
 description = "Neural network layers — Linear, Conv1d, LayerNorm, BatchNorm, activations, Dropout, Sequential"
+repository = "https://github.com/sweengineeringlabs/mllayers"
 keywords = ["machine-learning", "neural-network", "layers", "deep-learning"]
 categories = ["science", "mathematics"]
 
 [lib]
 path = "src/lib.rs"
 
+[[example]]
+name = "basic_layers"
+path = "examples/basic_layers.rs"
+
 [dependencies]
 swe-ml-tensor = { package = "llmtensor", git = "https://github.com/sweengineeringlabs/llmtensor", rev = "3f2fb98" }
 mlautograd = { git = "https://github.com/sweengineeringlabs/mlautograd" }
 thiserror = "2"
 rand = "0.8"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+
+[package.metadata.struct-engine]
+application_type = "lib"
+service_type = "layers-engine"

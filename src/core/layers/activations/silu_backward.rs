@@ -35,10 +35,11 @@ impl BackwardOp for SiLUBackward {
 mod tests {
     use super::*;
 
+    // @covers: backward
     #[test]
-    fn test_silu_backward_output_shape_matches_input() {
+    fn test_backward_output_shape_matches_input() {
         let op = SiLUBackward;
-        let input = Tensor::from_vec(vec![0.0, 1.0, -1.0], vec![3]).unwrap();
+        let input = Tensor::from_vec(vec![0.0, 1.0, -1.0], vec![3]).expect("input");
         let grad = Tensor::ones(vec![3]);
         let grads = op.backward(&grad, &[input]);
         assert_eq!(grads[0].shape(), &[3]);

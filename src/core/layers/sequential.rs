@@ -1,10 +1,6 @@
 use mlautograd::{MlResult, Tensor};
-use crate::api::layer::Layer;
-
-/// Sequential container that chains layers in order.
-pub struct Sequential {
-    layers: Vec<Box<dyn Layer>>,
-}
+use crate::api::traits::layer::Layer;
+use crate::api::types::sequential::Sequential;
 
 impl Sequential {
     pub fn new(layers: Vec<Box<dyn Layer>>) -> Self {
@@ -44,11 +40,12 @@ impl Layer for Sequential {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::layers::linear::Linear;
-    use crate::core::layers::activations::relu::ReLU;
+    use crate::api::types::linear::Linear;
+    use crate::api::types::activations::ReLU;
 
+    // @covers: new
     #[test]
-    fn test_sequential_new_stores_layers() {
+    fn test_new_stores_layers() {
         let seq = Sequential::new(vec![
             Box::new(Linear::new(4, 3)),
             Box::new(ReLU::new()),
@@ -56,23 +53,32 @@ mod tests {
         assert_eq!(seq.len(), 2);
     }
 
+    // @covers: forward
     #[test]
-    fn test_sequential_forward_chains_layers() {
+    fn test_forward_chains_layers_in_order() {
         let mut seq = Sequential::new(vec![
             Box::new(Linear::new(4, 3)),
             Box::new(ReLU::new()),
         ]);
         let input = Tensor::randn([2, 4]);
-        let output = seq.forward(&input).unwrap();
+        let output = seq.forward(&input).expect("forward");
         assert_eq!(output.shape(), &[2, 3]);
     }
 
+    // @covers: parameters
     #[test]
-    fn test_sequential_parameters_aggregates_all_layers() {
+    fn test_parameters_aggregates_all_sublayer_params() {
         let seq = Sequential::new(vec![
             Box::new(Linear::new(4, 3)),
             Box::new(Linear::new(3, 2)),
         ]);
         assert_eq!(seq.parameters().len(), 4);
+    }
+
+    // @covers: is_empty
+    #[test]
+    fn test_is_empty_returns_true_for_empty_container() {
+        let seq = Sequential::new(vec![]);
+        assert!(seq.is_empty());
     }
 }

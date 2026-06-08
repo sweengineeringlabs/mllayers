@@ -1,18 +1,6 @@
 use mlautograd::{BackwardOp, MlError, MlResult, Tensor, TapeEntry, tape};
-use crate::api::layer::Layer;
-
-/// Layer Normalization.
-///
-/// Normalizes over the last dimension of the input, then applies an affine
-/// transform: `output = gamma * normalized + beta`.
-///
-/// Reference: Ba, Kiros, Hinton - "Layer Normalization" (2016)
-pub struct LayerNorm {
-    gamma: Tensor,
-    beta: Tensor,
-    normalized_shape: Vec<usize>,
-    eps: f32,
-}
+use crate::api::traits::layer::Layer;
+use crate::api::types::layer_norm::LayerNorm;
 
 impl LayerNorm {
     pub fn new(normalized_shape: Vec<usize>) -> Self {
@@ -46,8 +34,6 @@ impl LayerNorm {
         &self.normalized_shape
     }
 
-    /// Inline layer norm forward compute.
-    /// Returns (output_data, normalized_data).
     fn compute(
         data: &[f32],
         gamma: &[f32],
@@ -208,24 +194,28 @@ impl BackwardOp for LayerNormBackward {
 mod tests {
     use super::*;
 
+    // @covers: new
     #[test]
-    fn test_layer_norm_new_creates_correct_params() {
+    fn test_new_creates_correct_params() {
         let ln = LayerNorm::new(vec![4]);
         assert_eq!(ln.normalized_shape(), &[4]);
         assert_eq!(ln.parameters().len(), 2);
     }
 
+    // @covers: with_eps
     #[test]
-    fn test_with_eps() {
+    fn test_with_eps_sets_custom_epsilon() {
         let ln = LayerNorm::with_eps(vec![4], 1e-3);
         assert!((ln.eps() - 1e-3).abs() < 1e-10);
     }
 
+    // @covers: forward
     #[test]
-    fn test_layer_norm_forward_output_shape() {
+    fn test_forward_output_shape() {
         let mut ln = LayerNorm::new(vec![3]);
-        let input = Tensor::from_vec(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3]).unwrap();
-        let output = ln.forward(&input).unwrap();
+        let input = Tensor::from_vec(vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], vec![2, 3])
+            .expect("input");
+        let output = ln.forward(&input).expect("forward");
         assert_eq!(output.shape(), &[2, 3]);
     }
 }

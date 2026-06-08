@@ -1,8 +1,7 @@
 use mlautograd::{MlError, MlResult, Tensor, TapeEntry, tape};
-use crate::api::layer::Layer;
+use crate::api::traits::layer::Layer;
+use crate::api::types::activations::SiLU;
 use crate::core::layers::activations::silu_backward::SiLUBackward;
-
-pub struct SiLU;
 
 impl SiLU {
     pub fn new() -> Self {
@@ -57,16 +56,18 @@ impl Layer for SiLU {
 mod tests {
     use super::*;
 
+    // @covers: forward
     #[test]
-    fn test_silu_forward_maps_zero_to_zero() {
+    fn test_forward_maps_zero_to_zero() {
         let mut silu = SiLU::new();
-        let input = Tensor::from_vec(vec![0.0], vec![1]).unwrap();
-        let output = silu.forward(&input).unwrap();
+        let input = Tensor::from_vec(vec![0.0], vec![1]).expect("input");
+        let output = silu.forward(&input).expect("forward");
         assert!(output.to_vec()[0].abs() < 1e-6);
     }
 
+    // @covers: parameters
     #[test]
-    fn test_silu_has_no_parameters() {
+    fn test_parameters_returns_empty_vec() {
         let silu = SiLU::new();
         assert!(silu.parameters().is_empty());
     }

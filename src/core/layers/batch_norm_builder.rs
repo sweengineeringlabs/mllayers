@@ -1,10 +1,5 @@
-use super::batch_norm::BatchNorm1d;
-
-pub struct BatchNorm1dBuilder {
-    num_features: usize,
-    eps: f32,
-    momentum: f32,
-}
+use crate::api::types::batch_norm1d::BatchNorm1d;
+use crate::api::types::batch_norm1d_builder::BatchNorm1dBuilder;
 
 impl BatchNorm1dBuilder {
     pub fn new(num_features: usize) -> Self {
@@ -34,15 +29,17 @@ impl BatchNorm1dBuilder {
 mod tests {
     use super::*;
 
+    // @covers: new
     #[test]
-    fn test_builder_new_uses_defaults() {
+    fn test_new_uses_default_eps_and_momentum() {
         let bn = BatchNorm1dBuilder::new(4).build();
         assert_eq!(bn.num_features(), 4);
         assert!((bn.eps() - 1e-5).abs() < 1e-10);
     }
 
+    // @covers: build
     #[test]
-    fn test_builder_custom_eps_and_momentum() {
+    fn test_build_applies_custom_eps_and_momentum() {
         let bn = BatchNorm1dBuilder::new(8).eps(1e-3).momentum(0.2).build();
         assert!((bn.eps() - 1e-3).abs() < 1e-10);
         assert!((bn.momentum() - 0.2).abs() < 1e-6);

@@ -1,20 +1,6 @@
 use mlautograd::{BackwardOp, MlError, MlResult, Tensor, TapeEntry, tape};
-use crate::api::layer::Layer;
-
-/// Batch Normalization for 1D inputs.
-///
-/// Applies batch normalization over a 2D input `[batch, features]` or a
-/// 3D input `[batch, channels, length]`.
-pub struct BatchNorm1d {
-    gamma: Tensor,
-    beta: Tensor,
-    running_mean: Vec<f32>,
-    running_var: Vec<f32>,
-    num_features: usize,
-    eps: f32,
-    momentum: f32,
-    training: bool,
-}
+use crate::api::traits::layer::Layer;
+use crate::api::types::batch_norm1d::BatchNorm1d;
 
 impl BatchNorm1d {
     pub fn new(num_features: usize) -> Self {
@@ -268,19 +254,37 @@ impl BackwardOp for BatchNorm1dBackward {
 mod tests {
     use super::*;
 
+    // @covers: new
     #[test]
-    fn test_batch_norm_new_defaults() {
+    fn test_new_defaults_to_training_mode() {
         let bn = BatchNorm1d::new(4);
         assert_eq!(bn.num_features(), 4);
         assert!(bn.is_training());
         assert!((bn.eps() - 1e-5).abs() < 1e-10);
     }
 
+    // @covers: forward
     #[test]
-    fn test_batch_norm_forward_output_shape_2d() {
+    fn test_forward_output_shape_2d() {
         let mut bn = BatchNorm1d::new(3);
         let input = Tensor::randn([4, 3]);
-        let output = bn.forward(&input).unwrap();
+        let output = bn.forward(&input).expect("forward");
         assert_eq!(output.shape(), &[4, 3]);
+    }
+
+    // @covers: eval
+    #[test]
+    fn test_eval_disables_training_mode() {
+        let mut bn = BatchNorm1d::new(4);
+        bn.eval();
+        assert!(!bn.is_training());
+    }
+
+    // @covers: with_config
+    #[test]
+    fn test_with_config_applies_eps_and_momentum() {
+        let bn = BatchNorm1d::with_config(4, 1e-3, 0.2);
+        assert!((bn.eps() - 1e-3).abs() < 1e-10);
+        assert!((bn.momentum() - 0.2).abs() < 1e-6);
     }
 }

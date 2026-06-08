@@ -1,14 +1,7 @@
 use mlautograd::{BackwardOp, MlResult, Tensor, TapeEntry, tape};
 use mlautograd::gradient::add::unbroadcast;
-use crate::api::layer::Layer;
-
-/// Linear layer: y = x @ W^T + b
-pub struct Linear {
-    weight: Tensor,
-    bias: Tensor,
-    in_features: usize,
-    out_features: usize,
-}
+use crate::api::traits::layer::Layer;
+use crate::api::types::linear::Linear;
 
 impl Linear {
     pub fn new(in_features: usize, out_features: usize) -> Self {
@@ -101,8 +94,9 @@ impl BackwardOp for LinearBackward {
 mod tests {
     use super::*;
 
+    // @covers: new
     #[test]
-    fn test_linear_new_creates_correct_parameter_shapes() {
+    fn test_new_creates_correct_parameter_shapes() {
         let layer = Linear::new(4, 3);
         assert_eq!(layer.in_features(), 4);
         assert_eq!(layer.out_features(), 3);
@@ -112,11 +106,19 @@ mod tests {
         assert_eq!(params[1].shape(), &[3]);
     }
 
+    // @covers: forward
     #[test]
-    fn test_linear_forward_output_shape() {
+    fn test_forward_output_shape() {
         let mut layer = Linear::new(4, 3);
         let input = Tensor::randn([2, 4]);
-        let output = layer.forward(&input).unwrap();
+        let output = layer.forward(&input).expect("forward");
         assert_eq!(output.shape(), &[2, 3]);
+    }
+
+    // @covers: parameters_mut
+    #[test]
+    fn test_parameters_mut_returns_weight_and_bias() {
+        let mut layer = Linear::new(4, 3);
+        assert_eq!(layer.parameters_mut().len(), 2);
     }
 }

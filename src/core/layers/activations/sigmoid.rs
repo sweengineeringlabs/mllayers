@@ -1,8 +1,7 @@
 use mlautograd::{MlResult, Tensor, TapeEntry, tape};
 use mlautograd::gradient::sigmoid::SigmoidBackward;
-use crate::api::layer::Layer;
-
-pub struct Sigmoid;
+use crate::api::traits::layer::Layer;
+use crate::api::types::activations::Sigmoid;
 
 impl Sigmoid {
     pub fn new() -> Self {
@@ -46,16 +45,18 @@ impl Layer for Sigmoid {
 mod tests {
     use super::*;
 
+    // @covers: forward
     #[test]
-    fn test_sigmoid_forward_maps_zero_to_half() {
+    fn test_forward_maps_zero_to_half() {
         let mut sigmoid = Sigmoid::new();
-        let input = Tensor::from_vec(vec![0.0], vec![1]).unwrap();
-        let output = sigmoid.forward(&input).unwrap();
+        let input = Tensor::from_vec(vec![0.0], vec![1]).expect("input");
+        let output = sigmoid.forward(&input).expect("forward");
         assert!((output.to_vec()[0] - 0.5).abs() < 1e-6);
     }
 
+    // @covers: parameters
     #[test]
-    fn test_sigmoid_has_no_parameters() {
+    fn test_parameters_returns_empty_vec() {
         let sig = Sigmoid::new();
         assert!(sig.parameters().is_empty());
     }
