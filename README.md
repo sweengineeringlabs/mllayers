@@ -6,6 +6,7 @@
 - [Quick Start](#quick-start)
 - [API](#api)
 - [Documentation](#documentation)
+- [Development](#development)
 
 ## Quick Start
 
@@ -43,6 +44,16 @@ let output = model.forward(&input)?;
 - [Overview](docs/README.md) - W³H
 - [Architecture](docs/3-design/architecture.md) - System design
 - [Integration](docs/3-design/integration.md) - Integration guide
+
+## Development
+
+After cloning, activate the commit-msg hook:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+The hook rejects commits that carry AI-assistant attribution (Co-Authored-By trailers, "Generated with …" footers, 🤖 emoji). The same check runs server-side via `.github/workflows/no-ai-attribution.yml` and cannot be bypassed with `--no-verify`.
 
 ## Related FRs
 
